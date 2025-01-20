@@ -2,50 +2,60 @@ import {
   Controller,
   Post,
   Body,
-  Session,
-  BadRequestException,
+  Put,
+  Get,
+  Param,
+  ParseIntPipe,
+  Delete,
+  Query,
+  DefaultValuePipe,
 } from '@nestjs/common';
 import { UserService } from './user.service';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { ApiBody, ApiTags } from '@nestjs/swagger';
+import { Pagination } from 'nestjs-typeorm-paginate';
+import { User } from 'src/entities/user.entity';
 
 @Controller('user')
+@ApiTags('Users')
+
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post('register')
-  async register(@Body() body: { username: string; password: string }) {
-    const { username, password } = body;
-    const existingUser = await this.userService.findByUsername(username);
-    if (existingUser) {
-      throw new BadRequestException('Username already exists');
+  @ApiBody(
+    {
+      type: CreateUserDto,
     }
-    return this.userService.createUser(username, password);
+  )
+  create(@Body() user: CreateUserDto) {
+    return this.userService.create(user);
   }
-
-  @Post('login')
-  async login(
-    @Body() body: { username: string; password: string },
-    @Session() session: Record<string, any>,
-  ) {
-    const user = await this.userService.validateUser(
-      body.username,
-      body.password,
-    );
-    if (!user) {
-      throw new BadRequestException('Invalid username or password');
-    }
-    session.userId = user.id;
-    console.log('Session after login:', session);
-    return { message: 'Logged in successfully' };
-  }
-
-  @Post('logout')
-  logout(@Session() session: Record<string, any>) {
-    console.log('Session before logout:', session);
-    session.destroy((err) => {
-      if (err) {
-        throw new BadRequestException('Failed to log out');
-      }
+  @Get()
+  async findAll(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number = 10,
+  ):Promise<Pagination<User>>{
+    limit = limit > 100 ? 100 : limit;
+    return this.userService.paginate({
+      page,
+      limit,
     });
-    return { message: 'Logged out successfully' };
+  }
+  @Get(':id')
+  async findOne(@Param('id', ParseIntPipe) id: number){
+    return this.userService.findOne(id)
+  }
+  @Put(':id')
+  @ApiBody({
+    type: UpdateUserDto
+  })
+  async update(@Param('id', ParseIntPipe) id: number, @Body() updateUserDto: UpdateUserDto){
+    return this.userService.update(id, updateUserDto)
+  }
+  @Delete(':id')
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    return this.userService.delete(id)
   }
 }
